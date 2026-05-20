@@ -1,0 +1,5 @@
+fast-go.exe
+fast-go.exe~
+*.exe
+fast-result-*.json
+.DS_Store
