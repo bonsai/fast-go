@@ -1,0 +1,41 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1
+
+      - name: Build windows exe
+        run: GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o fast-go.exe .
+
+      - name: Build linux binary
+        run: GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o fast-go-linux-amd64 .
+
+      - name: Upload windows exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: fast-go-windows-amd64
+          path: fast-go.exe
+
+      - name: Upload linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: fast-go-linux-amd64
+          path: fast-go-linux-amd64
