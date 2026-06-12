@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -32,13 +33,12 @@ func Run(ctx context.Context, updates chan<- SpeedSample) {
 	}
 
 	reportCh := make(chan int64, 2000)
-	go func() {
-		<-ctx.Done()
-		close(reportCh)
-	}()
 
+	var wg sync.WaitGroup
 	for i := 0; i < workers; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 			if err != nil {
 				return
@@ -68,6 +68,11 @@ func Run(ctx context.Context, updates chan<- SpeedSample) {
 			}
 		}()
 	}
+
+	go func() {
+		wg.Wait()
+		close(reportCh)
+	}()
 
 	ticker := time.NewTicker(reportInterval)
 	defer ticker.Stop()

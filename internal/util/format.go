@@ -34,3 +34,18 @@ func FormatDuration(d time.Duration) string {
 	}
 	return fmt.Sprintf("%.1f s", d.Seconds())
 }
+
+func SpeedRating(mbps float64) string {
+	switch {
+	case mbps >= 200:
+		return "Excellent"
+	case mbps >= 100:
+		return "Great"
+	case mbps >= 50:
+		return "Good"
+	case mbps >= 10:
+		return "Fair"
+	default:
+		return "Poor"
+	}
+}

@@ -23,6 +23,27 @@ const (
 	StateError
 )
 
+type ViewMode int
+
+const (
+	ViewModeCompact ViewMode = iota
+	ViewModeDS
+	ViewModeWide
+	viewModeCount
+)
+
+func (vm ViewMode) String() string {
+	switch vm {
+	case ViewModeCompact:
+		return "GB"
+	case ViewModeDS:
+		return "DS"
+	case ViewModeWide:
+		return "WIDE"
+	}
+	return "WIDE"
+}
+
 type Model struct {
 	state    State
 	width    int
@@ -46,6 +67,10 @@ type Model struct {
 
 	stopTest context.CancelFunc
 	speedCh  chan speedtest.SpeedSample
+
+	lat      float64
+	lon      float64
+	viewMode ViewMode
 }
 
 type speedSampleMsg speedtest.SpeedSample
@@ -53,6 +78,11 @@ type tickMsg struct{}
 type startTestMsg struct {
 	speedCh chan speedtest.SpeedSample
 	cancel  context.CancelFunc
+}
+
+type locationMsg struct {
+	lat float64
+	lon float64
 }
 
 func InitialModel() Model {
@@ -65,6 +95,7 @@ func InitialModel() Model {
 		showDetails: false,
 		width:       80,
 		height:      24,
+		viewMode:    ViewModeWide,
 	}
 }
 
@@ -73,6 +104,7 @@ func (m Model) Init() tea.Cmd {
 		tea.EnterAltScreen,
 		m.tickCmd(),
 		m.startTestCmd(),
+		m.fetchLocationCmd(),
 	)
 }
 
@@ -104,7 +136,33 @@ func (m Model) tickCmd() tea.Cmd {
 	})
 }
 
+func (m Model) fetchLocationCmd() tea.Cmd {
+	return func() tea.Msg {
+		lat, lon, err := util.FetchLocation()
+		if err != nil {
+			return nil
+		}
+		return locationMsg{lat: lat, lon: lon}
+	}
+}
 
+func (m Model) viewWidth() int {
+	w := int(float64(m.width) * 0.8)
+	if w < 30 {
+		w = 30
+	}
+	switch m.viewMode {
+	case ViewModeCompact:
+		if w > 34 {
+			w = 34
+		}
+	case ViewModeDS:
+		if w > 50 {
+			w = 50
+		}
+	}
+	return w
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -148,13 +206,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "d":
 			m.showDetails = !m.showDetails
 
+		case "v":
+			m.viewMode = ViewMode((int(m.viewMode) + 1) % int(viewModeCount))
+
 		case "s":
 			if m.result != nil {
-				f, err := os.Create(fmt.Sprintf("fast-result-%s.json", time.Now().Format("20060102-150405")))
+				f, err := os.OpenFile("fast-results.jsonl", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				if err == nil {
-					fmt.Fprintf(f, `{"download_mbps":%.1f,"bytes_received":%d,"duration_ms":%d,"timestamp":"%s"}`+"\n",
+					fmt.Fprintf(f, `{"download_mbps":%.1f,"bytes_received":%d,"duration_ms":%d,"timestamp":"%s","lat":%.4f,"lon":%.4f}`+"\n",
 						m.result.DownloadMbps, m.result.BytesReceived,
-						m.result.Duration.Milliseconds(), m.result.Timestamp.Format(time.RFC3339))
+						m.result.Duration.Milliseconds(), m.result.Timestamp.Format(time.RFC3339),
+						m.lat, m.lon)
 					f.Close()
 				}
 			}
@@ -165,6 +227,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.speedCh = msg.speedCh
 		m.stopTest = msg.cancel
 		return m, m.nextSampleCmd()
+
+	case locationMsg:
+		m.lat = msg.lat
+		m.lon = msg.lon
+		return m, nil
 
 	case speedSampleMsg:
 		s := speedtest.SpeedSample(msg)
@@ -217,14 +284,14 @@ func (m Model) View() string {
 	switch m.state {
 	case StateIdle:
 		fmt.Fprint(&b, "\n\n\n\n")
-		title := lipgloss.NewStyle().Bold(true).Foreground(prim).Width(m.width).Align(lipgloss.Center).
+		title := lipgloss.NewStyle().Bold(true).Foreground(prim).Width(m.viewWidth()).Align(lipgloss.Center).
 			Render("FAST-GO")
-		sub := lipgloss.NewStyle().Foreground(sec).Width(m.width).Align(lipgloss.Center).
+		sub := lipgloss.NewStyle().Foreground(sec).Width(m.viewWidth()).Align(lipgloss.Center).
 			Render("Local Speed Test")
 		fmt.Fprintln(&b, title)
 		fmt.Fprintln(&b, sub)
 		fmt.Fprintln(&b)
-		loading := lipgloss.NewStyle().Foreground(acc).Width(m.width).Align(lipgloss.Center).
+		loading := lipgloss.NewStyle().Foreground(acc).Width(m.viewWidth()).Align(lipgloss.Center).
 			Render("Initializing...")
 		fmt.Fprintln(&b, loading)
 
@@ -256,8 +323,8 @@ func (m Model) renderTest(b *strings.Builder, prim, sec, acc lipgloss.Color) {
 	fmt.Fprint(b, "\n\n")
 
 	moodLabel := lipgloss.NewStyle().Foreground(acc).Bold(true).
-		Width(m.width).Align(lipgloss.Center).
-		Render("◆ " + m.mood.String() + " ◆")
+		Width(m.viewWidth()).Align(lipgloss.Center).
+		Render("◆ " + m.mood.String() + " ◆  [" + m.viewMode.String() + "]")
 	fmt.Fprintln(b, moodLabel)
 	fmt.Fprintln(b)
 
@@ -269,14 +336,14 @@ func (m Model) renderTest(b *strings.Builder, prim, sec, acc lipgloss.Color) {
 		Border(lipgloss.DoubleBorder()).
 		BorderForeground(prim).
 		Padding(0, 2).
-		Width(m.width - 6).
+		Width(m.viewWidth() - 6).
 		Align(lipgloss.Center)
 
 	boxedNum := borderStyle.Render(bigNum)
 	fmt.Fprintln(b, boxedNum)
 	fmt.Fprintln(b)
 
-	gaugeWidth := m.width - 10
+	gaugeWidth := m.viewWidth() - 10
 	if gaugeWidth < 10 {
 		gaugeWidth = 10
 	}
@@ -287,11 +354,21 @@ func (m Model) renderTest(b *strings.Builder, prim, sec, acc lipgloss.Color) {
 	if filled < 0 {
 		filled = 0
 	}
-	gauge := strings.Repeat("█", filled) + strings.Repeat("░", gaugeWidth-filled)
-	gaugeStr := lipgloss.NewStyle().Foreground(sec).Render(gauge)
+	// Row 1: leader bar (slightly ahead for visual pop)
+	row1Filled := filled + 2
+	if row1Filled > gaugeWidth {
+		row1Filled = gaugeWidth
+	}
+	row1 := strings.Repeat("█", row1Filled) + strings.Repeat("░", gaugeWidth-row1Filled)
+	// Row 2: actual progress
+	row2 := strings.Repeat("█", filled) + strings.Repeat("░", gaugeWidth-filled)
+
+	gaugeRow1 := lipgloss.NewStyle().Foreground(prim).Render(row1)
+	gaugeRow2 := lipgloss.NewStyle().Foreground(sec).Render(row2)
 	pctStr := lipgloss.NewStyle().Foreground(acc).Render(fmt.Sprintf("%3.0f%%", m.displayGauge.Current*100))
 
-	fmt.Fprintf(b, "  %s  %s\n", gaugeStr, pctStr)
+	fmt.Fprintf(b, "  %s  %s\n", gaugeRow1, pctStr)
+	fmt.Fprintf(b, "  %s\n", gaugeRow2)
 
 	progressStr := fmt.Sprintf("  Testing... %s / %s  (%s)",
 		util.FormatBytes(m.bytesRecv),
@@ -304,7 +381,7 @@ func (m Model) renderTest(b *strings.Builder, prim, sec, acc lipgloss.Color) {
 	miniDown := lipgloss.NewStyle().Foreground(prim).Render(fmt.Sprintf("↓ %s", util.FormatMbps(m.actualSpeed)))
 	miniUp := lipgloss.NewStyle().Foreground(sec).Render("↑ --")
 	miniPing := lipgloss.NewStyle().Foreground(acc).Render("ping --")
-	miniLine := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).
+	miniLine := lipgloss.NewStyle().Width(m.viewWidth()).Align(lipgloss.Center).
 		Render(fmt.Sprintf("%s    %s    %s", miniDown, miniUp, miniPing))
 	fmt.Fprintln(b, miniLine)
 }
@@ -312,14 +389,24 @@ func (m Model) renderTest(b *strings.Builder, prim, sec, acc lipgloss.Color) {
 func (m Model) renderResult(b *strings.Builder, prim, sec, acc lipgloss.Color) {
 	fmt.Fprintln(b)
 	complete := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00FF00")).
-		Width(m.width).Align(lipgloss.Center).
+		Width(m.viewWidth()).Align(lipgloss.Center).
 		Render("✓ Test Complete")
 	fmt.Fprintln(b, complete)
+
+	if m.result != nil {
+		fmt.Fprintln(b)
+		avgStr := lipgloss.NewStyle().Foreground(sec).
+			Width(m.viewWidth()).Align(lipgloss.Center).
+			Render(fmt.Sprintf("Average: %s  |  Rating: %s",
+				util.FormatMbps(m.result.DownloadMbps),
+				util.SpeedRating(m.result.DownloadMbps)))
+		fmt.Fprintln(b, avgStr)
+	}
 
 	if m.showDetails && m.result != nil {
 		fmt.Fprintln(b)
 		detail := lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).
-			Width(m.width).Align(lipgloss.Center).
+			Width(m.viewWidth()).Align(lipgloss.Center).
 			Render(fmt.Sprintf("Download: %s    Data: %s    Duration: %s",
 				util.FormatMbps(m.result.DownloadMbps),
 				util.FormatBytes(m.result.BytesReceived),
@@ -329,8 +416,8 @@ func (m Model) renderResult(b *strings.Builder, prim, sec, acc lipgloss.Color) {
 
 	fmt.Fprintln(b)
 	hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).
-		Width(m.width).Align(lipgloss.Center)
+		Width(m.viewWidth()).Align(lipgloss.Center)
 
-	hints := []string{"[r] Retry", "[m] Mood", "[d] Details", "[s] Save", "[q] Quit"}
+	hints := []string{"[r] Retry", "[m] Mood", "[v] View", "[d] Details", "[s] Save", "[q] Quit"}
 	fmt.Fprintln(b, hintStyle.Render(strings.Join(hints, "  ")))
 }
