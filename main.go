@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -10,10 +11,11 @@ import (
 )
 
 func main() {
-	fmt.Println("fast-go — Local Speed Test")
+	mini := flag.Bool("mini", false, "start in mini view mode")
+	flag.Parse()
 
 	p := tea.NewProgram(
-		tui.InitialModel(),
+		tui.InitialModel(*mini),
 		tea.WithAltScreen(),
 	)
 

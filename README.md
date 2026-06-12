@@ -6,26 +6,49 @@ Pop-style TUI with dynamic mood color schemes — every run feels different.
 
 ## Demo
 
+### NORMAL mode
+
 ```
-◆ SUNSET ◆
+⚡ FAST-GO                                       ◆ NEON · NORMAL
+────────────────────────────────────────────────────────────────
 
-╔══════════════════════════════════════════════════════════╗
-║                    123.4 Mbps                            ║
-╚══════════════════════════════════════════════════════════╝
+                █████  ██   ██ ███████    ██████
+                    ██ ██   ██ ██              ██
+                 ████  ███████ ██████      █████
+               ██           ██      ██         ██
+               ███████      ██ ██████  ██ ██████
 
-  ████████████████████████████████████████████░░░░░░░  75%
-  Testing... 18.8 MB / 25.0 MB  (7.5 s)
+                      Mbps  ·  ↓ DOWNLOAD
 
-  ↓ 118.2 Mbps    ↑ --    ping --
+            ▃▃▄▄▅▅▅▆▆▆▇▇█▃▃▄▄▅▅▅▆▆▆▇▇█▃▃▄▄▅▅▅▆▆▆▇▇█▃
+
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌  73%
+                  ⠋ 18.0 MB / 25.0 MB · 7.0 s
+
+    r retry · m mood · v mini · d details · s save · q quit
+```
+
+### MINI mode
+
+```
+       ⚡ FAST-GO ◆ OCEAN
+╭────────────────────────────────────╮
+│ ↓ 245.3 Mbps            ▅▅▅▆▆▆▇▇█▃ │
+│ ━━━━━━━━━━━━━━━╌╌╌╌╌╌  73% · 7.0 s │
+╰────────────────────────────────────╯
+ r retry · v normal · s save · q quit
 ```
 
 ## Features
 
 - **Real speed measurement** — downloads from OVH/Tele2/Hetzner test files, parallel connections
 - **Running average** — displays cumulative average throughput over the test duration
+- **Two view modes** — NORMAL (big block digits + sparkline) and MINI (compact widget panel), toggle with `v`
+- **Big block digits** — speed readout rendered as 5-row block numerals with a vertical color gradient
+- **Speed sparkline** — live history of throughput samples
+- **Gradient gauge** — progress bar that fades between palette colors
 - **7 mood color schemes** — VIVID, PASTEL, NEON, MONO, RETRO, OCEAN, SUNSET
 - **Animated counter** — smooth ease-out counting from 0 to measured speed
-- **Progress gauge** — real-time fill bar with percentage
 - **Keyboard controls** — retry, switch mood, show details, save results
 - **Zero external API dependency** — no fast.com API, no third-party services
 
@@ -46,7 +69,8 @@ go build -o fast-go.exe .
 ## Usage
 
 ```bash
-fast-go.exe
+fast-go.exe         # NORMAL mode
+fast-go.exe -mini   # start in MINI mode
 ```
 
 ### Controls
@@ -55,9 +79,10 @@ fast-go.exe
 |-----|--------|
 | `q` / `Ctrl+C` | Quit |
 | `r` | Retry test |
+| `v` | Toggle view mode (NORMAL ⇄ MINI) |
 | `m` | Cycle mood (VIVID → PASTEL → NEON → …) |
-| `d` | Toggle details |
-| `s` | Save result to JSON |
+| `d` | Toggle details (NORMAL mode) |
+| `s` | Save result to `fast-results.jsonl` |
 
 ## Moods
 
