@@ -10,9 +10,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -29,13 +29,13 @@ jobs:
         run: GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o fast-go-linux-amd64 .
 
       - name: Upload windows exe
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: fast-go-windows-amd64
           path: fast-go.exe
 
       - name: Upload linux binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: fast-go-linux-amd64
           path: fast-go-linux-amd64
